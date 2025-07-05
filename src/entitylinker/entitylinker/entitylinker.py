@@ -1,98 +1,401 @@
 import reflex as rx
 import asyncio
-import sys,os,json
+import json
 import httpx
+from typing import List, Dict, Any, TypedDict # Import TypedDict and other types for better hinting
 
+# --- Define TypedDicts for clearer data structures ---
+# These help Reflex understand the structure of the data in your state variables,
+# which can prevent 'UntypedVarError' and improve code clarity and maintainability.
 
+class Span(TypedDict):
+    """Expected structure for each detected span."""
+    start: int
+    end: int
+    text: str
+    # Add other fields if your span detection returns them, e.g., 'type', 'label'
+
+class Candidate(TypedDict):
+    """Expected structure for each fetched candidate."""
+    span_index: int # Assuming you might include an index to link back to the span
+    entity_uri: str
+    score: float
+    # Add other fields if your candidate fetching returns them
+
+class FinalResult(TypedDict):
+    """Expected structure for each final linked result."""
+    id: str # Assuming this is like an entity URI or ID
+    answer: str # Assuming this is the label or main text for the linked entity
+    confidence: float
+    # Add other fields as per your final reranking output
+
+# --- Reflex State Definition ---
 class State(rx.State):
-    text: str = ""
-    updates: list[str] = []
+    """The app state."""
+    text: str = "" # The input text from the user
     
-    async def send_text(self):
-        self.updates = ["Sending request to API..."]
-        yield
+    # State variables to store results from each API stage
+    spans: List[Span] = []
+    candidates: List[Candidate] = []
+    final_results: List[FinalResult] = []
+    
+    updates: List[str] = [] # To store sequential update messages for the log display
+    
+    is_loading: bool = False # Controls the loading spinner and button state
+    error_message: str = "" # Stores and displays any errors that occur
 
+    async def send_text(self):
+        """
+        Handles the submission of text, orchestrating sequential API calls
+        and updating the UI with intermediate progress.
+        """
+        # Reset state for a new submission
+        self.error_message = ""
+        self.is_loading = True
+        self.spans = []
+        self.candidates = []
+        self.final_results = []
+        self.updates = ["Starting entity linking process..."]
+        yield # Update frontend immediately to show initial status
+
+        # --- Stage 1: Get Spans ---
         try:
+            self.updates.append("Requesting detected spans from API...")
+            yield # Update log
             async with httpx.AsyncClient() as client:
                 response = await client.post(
                     "http://localhost:5001/get_spans",
                     json={"question": self.text},
-                    timeout=10.0
+                    timeout=10.0 # Set a timeout for the request
                 )
-            if response.status_code == 200:
-                spans = response.json()
-                self.updates.append("Spans received.")
-                self.updates.append(json.dumps(spans, indent=2))  # Pretty print
-                yield
-            else:
-                self.updates.append(f"Error {response.status_code}: {response.text}")
-                yield
-        except Exception as e:
-            self.updates.append(f"Request failed: {str(e)}")
+            response.raise_for_status() # Raise an HTTPStatusError for 4xx/5xx responses
+            self.spans = response.json() # Parse JSON response
+            self.updates.append(f"Spans received ({len(self.spans)} found).")
+            yield # Update log and display spans table if ready
+        except httpx.RequestError as e:
+            # Catch network errors (e.g., connection refused, timeout)
+            self.error_message = f"Network or API connection error during span detection: {str(e)}"
+            self.updates.append(self.error_message)
+            self.is_loading = False # Stop loading
             yield
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    "http://localhost:5001/get_candidates",
-                    json={"question": self.text, "spans":spans},
-                    timeout=10.0
-                )
-            if response.status_code == 200:
-                candidates = response.json()
-                self.updates.append("Candidates received.")
-                self.updates.append(json.dumps(candidates, indent=2))  # Pretty print
-                yield
-            else:
-                self.updates.append(f"Error {response.status_code}: {response.text}")
-                yield
-        except Exception as e:
-            self.updates.append(f"Request failed: {str(e)}")
+            return # Stop further processing on critical error
+        except json.JSONDecodeError:
+            # Catch errors if the response is not valid JSON
+            self.error_message = "Invalid JSON response received for spans."
+            self.updates.append(self.error_message)
+            self.is_loading = False
             yield
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    "http://localhost:5001/get_final_result",
-                    json={"question": self.text, "spans":spans, "entity_candidates":candidates},
-                    timeout=30.0
-                )
-            if response.status_code == 200:
-                final_results = response.json()
-                self.updates.append("Final results received.")
-                self.updates.append(json.dumps(final_results, indent=2))  # Pretty print
-                yield
-            else:
-                self.updates.append(f"Error {response.status_code}: {response.text}")
-                yield
-        except Exception as e:
-            import traceback
-            self.updates.append(f"Request failed: {str(e)}")
-            self.updates.append(traceback.format_exc())
+            return
+        except httpx.HTTPStatusError as e:
+            # Catch HTTP errors (e.g., 404, 500 from API)
+            self.error_message = f"API error getting spans (Status: {e.response.status_code}): {e.response.text}"
+            self.updates.append(self.error_message)
+            self.is_loading = False
             yield
-        yield
+            return
+        except Exception as e:
+            # Catch any other unexpected errors
+            self.error_message = f"An unexpected error occurred during span detection: {str(e)}"
+            self.updates.append(self.error_message)
+            self.is_loading = False
+            yield
+            return
 
-def index():
-    return rx.container(
-        rx.heading("Real-Time Text Streamer", size="4"),
-        rx.text_area(
-            placeholder="When did Chris Biemann publish a paper in ACL?",
-            on_change=State.set_text,
-            width="100%",
-            height="100px"
+        # --- Stage 2: Get Candidates ---
+        # Only proceed if spans were successfully retrieved
+        if self.spans:
+            try:
+                self.updates.append("Requesting candidates from API...")
+                yield # Update log
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(
+                        "http://localhost:5001/get_candidates",
+                        json={"question": self.text, "spans": self.spans}, # Pass spans from previous step
+                        timeout=10.0
+                    )
+                response.raise_for_status()
+                self.candidates = response.json()
+                self.updates.append(f"Candidates received ({len(self.candidates)} found).")
+                yield # Update log and display candidates table if ready
+            except httpx.RequestError as e:
+                self.error_message = f"Network or API connection error during candidate fetching: {str(e)}"
+                self.updates.append(self.error_message)
+                self.is_loading = False
+                yield
+                return
+            except json.JSONDecodeError:
+                self.error_message = "Invalid JSON response received for candidates."
+                self.updates.append(self.error_message)
+                self.is_loading = False
+                yield
+                return
+            except httpx.HTTPStatusError as e:
+                self.error_message = f"API error getting candidates (Status: {e.response.status_code}): {e.response.text}"
+                self.updates.append(self.error_message)
+                self.is_loading = False
+                yield
+                return
+            except Exception as e:
+                self.error_message = f"An unexpected error occurred during candidate fetching: {str(e)}"
+                self.updates.append(self.error_message)
+                self.is_loading = False
+                yield
+                return
+        else:
+            self.updates.append("Skipping candidate fetching: No spans were detected.")
+            yield # Update log
+
+        # --- Stage 3: Get Final Result ---
+        # Only proceed if candidates were successfully retrieved
+        if self.candidates:
+            try:
+                self.updates.append("Requesting final results from API (this may take longer)...")
+                yield # Update log
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(
+                        "http://localhost:5001/get_final_result",
+                        json={
+                            "question": self.text, 
+                            "spans": self.spans, 
+                            "entity_candidates": self.candidates # Pass candidates from previous step
+                        },
+                        timeout=30.0 # Increased timeout for potentially longer final processing
+                    )
+                response.raise_for_status()
+                self.final_results = response.json()
+                self.updates.append("Final results received.")
+                yield # Update log and display final results table if ready
+            except httpx.RequestError as e:
+                self.error_message = f"Network or API connection error during final result processing: {str(e)}"
+                self.updates.append(self.error_message)
+                yield
+            except json.JSONDecodeError:
+                self.error_message = "Invalid JSON response received for final results."
+                self.updates.append(self.error_message)
+                yield
+            except httpx.HTTPStatusError as e:
+                self.error_message = f"API error getting final results (Status: {e.response.status_code}): {e.response.text}"
+                self.updates.append(self.error_message)
+                yield
+            except Exception as e:
+                self.error_message = f"An unexpected error occurred during final result processing: {str(e)}"
+                self.updates.append(self.error_message)
+                # Keep traceback print for server-side debugging, not for frontend display usually
+                # import traceback
+                # self.updates.append(traceback.format_exc()) 
+                yield
+        else:
+            self.updates.append("Skipping final results: No candidates were found.")
+            yield # Update log
+
+        # Final state update after all processes are done or an error has stopped them
+        self.is_loading = False 
+        self.updates.append("Process completed.")
+        yield # Ensures all final state changes are pushed to the frontend
+
+
+# --- UI Components ---
+
+def render_spans_table() -> rx.Component:
+    """Renders a table for detected spans."""
+    return rx.table.root(
+        rx.table.header(
+            rx.table.row(
+                rx.table.column_header_cell("Start"),
+                rx.table.column_header_cell("End"),
+                rx.table.column_header_cell("Text"),
+            )
         ),
-        rx.button("Submit", on_click=State.send_text, mt="2"),
-        rx.box(
-            rx.foreach(State.updates, lambda msg: rx.text(msg)),
-            border="1px solid #ccc",
-            padding="2",
-            mt="4",
-            height="200px",
-            overflow_y="scroll"
+        rx.table.body(
+            rx.foreach(
+                State.spans,
+                lambda span: rx.table.row(
+                    rx.table.cell(str(span.get("start", ""))),
+                    rx.table.cell(str(span.get("end", ""))),
+                    rx.table.cell(span.get("text", "")),
+                ),
+            )
         ),
-        spacing="4",
-        padding="4",
-        max_width="600px",
-        margin="auto"
+        variant="surface", # Add a variant for better styling
+        width="100%",
+        border="1px solid lightgray",
+        margin_top="1em",
     )
 
-app = rx.App()
-app.add_page(index)
+
+def render_candidates_table() -> rx.Component:
+    """Renders a table for fetched candidates."""
+    return rx.table.root(
+        rx.table.header(
+            rx.table.row(
+                rx.table.column_header_cell("Span Index"),
+                rx.table.column_header_cell("Entity URI"),
+                rx.table.column_header_cell("Score"),
+            )
+        ),
+        rx.table.body(
+            rx.foreach(
+                State.candidates,
+                lambda candidate: rx.table.row(
+                    rx.table.cell(str(candidate.get("span_index", ""))),
+                    rx.table.cell(candidate.get("entity_uri", "")),
+                    rx.table.cell(f"{candidate.get('score', 0.0):.4f}"), # Format score for display
+                ),
+            )
+        ),
+        variant="surface",
+        width="100%",
+        border="1px solid lightgray",
+        margin_top="1em",
+    )
+
+
+def render_final_results_table() -> rx.Component:
+    """Renders a table for final linked results."""
+    return rx.table.root(
+        rx.table.header(
+            rx.table.row(
+                rx.table.column_header_cell("Result ID"),
+                rx.table.column_header_cell("Answer"),
+                rx.table.column_header_cell("Confidence"),
+            )
+        ),
+        rx.table.body(
+            rx.foreach(
+                State.final_results,
+                lambda result: rx.table.row(
+                    rx.table.cell(str(result.get("id", ""))),
+                    rx.table.cell(str(result.get("answer", ""))),
+                    rx.table.cell(f"{result.get('confidence', 0.0):.4f}"), # Format confidence
+                ),
+            )
+        ),
+        variant="surface",
+        width="100%",
+        border="1px solid lightgray",
+        margin_top="1em",
+    )
+
+
+def index() -> rx.Component:
+    """The main application page."""
+    return rx.container(
+        rx.vstack(
+            rx.heading("Entity Linker (Sequential HTTP Requests)", size="7", mb="4", color="blue.800"),
+            rx.text(
+                "Enter a natural language question to extract and link entities.",
+                color="gray.700",
+                mb="5",
+                text_align="center"
+            ),
+            rx.text_area(
+                placeholder="e.g., When did Chris Biemann publish a paper in ACL?",
+                on_change=State.set_text,
+                value=State.text,
+                width="100%",
+                height="100px",
+                padding="4",
+                border_radius="12px",
+                box_shadow="md",
+                _focus={"border_color": "blue.500", "box_shadow": "outline"}
+            ),
+            rx.button(
+                "Submit", 
+                on_click=State.send_text, 
+                mt="4",
+                is_loading=State.is_loading, # Show loading spinner on button
+                loading_text="Processing...",
+                color_scheme="blue",
+                size="2"
+            ),
+            
+            # Display updates log
+            rx.divider(mt="6", mb="6"), # Increased margin for dividers
+            rx.heading("Process Log", size="4", mb="3", color="gray.700"),
+            rx.box(
+                rx.foreach(State.updates, lambda update: rx.text(update, font_size="0.9em", color="gray.600")),
+                width="100%",
+                min_height="50px",
+                padding="3",
+                border="1px solid #e0e0e0",
+                border_radius="8px",
+                bg="white",
+                overflow_y="auto",
+                max_height="200px",
+                box_shadow="sm"
+            ),
+            
+            # Display error message
+            rx.cond(
+                State.error_message != "",
+                rx.box(
+                    rx.text(State.error_message, color="red.600", font_weight="bold"),
+                    mt="4",
+                    px="4",
+                    py="2",
+                    border="1px solid",
+                    border_color="red.300",
+                    border_radius="8px",
+                    bg="red.50",
+                    width="100%"
+                )
+            ),
+
+            rx.divider(mt="6", mb="6"),
+
+            # Conditionally render tables based on data availability
+            rx.cond(
+                State.spans.length() > 0, # Use .length() for Reflex Var lists
+                rx.box(
+                    rx.heading("Detected Spans", size="5", mb="3", color="purple.700"),
+                    render_spans_table(),
+                    width="100%",
+                    mt="4" # Add margin top to this box
+                )
+            ),
+            rx.cond(
+                State.candidates.length() > 0, # Use .length()
+                rx.box(
+                    rx.heading("Fetched Candidates", size="5", mb="3", color="green.700"),
+                    render_candidates_table(),
+                    width="100%",
+                    mt="4" # Add margin top to this box
+                )
+            ),
+            rx.cond(
+                State.final_results.length() > 0, # Use .length()
+                rx.box(
+                    rx.heading("Final Linked Results", size="5", mb="3", color="teal.700"),
+                    render_final_results_table(),
+                    width="100%",
+                    mt="4" # Add margin top to this box
+                )
+            ),
+            
+            spacing="5", # This `spacing` on the Vstack handles overall vertical gaps between its direct children
+            padding="20px",
+            max_width="900px", # Increased max width for better layout
+            margin_x="auto", # Center horizontally
+            margin_y="50px", # Add vertical margin
+            bg="white",
+            border_radius="16px",
+            box_shadow="lg" # Apply a larger shadow
+        ),
+        font_family="Inter, sans-serif", # Use a common sans-serif font
+        bg="gray.50", # Light gray background for the page
+        min_height="100vh", # Ensure it takes full viewport height
+        display="flex",
+        align_items="center",
+        justify_content="center", # Center content vertically and horizontally
+    )
+
+# --- App Initialization ---
+app = rx.App(
+    theme=rx.theme(
+        appearance="light", # Default to light mode
+        accent_color="blue", # Set accent color for interactive elements
+        radius="small", # Overall border-radius for components
+        scaling="95%", # Overall scaling for components
+    ),
+)
+app.add_page(index, title="DBLP Entity Linker")
