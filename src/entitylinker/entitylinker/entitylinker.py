@@ -2,32 +2,34 @@ import reflex as rx
 import asyncio
 import json
 import httpx
-from typing import List, Dict, Any, TypedDict # Import TypedDict and other types for better hinting
+from typing import List
+from typing import List, Dict, Any, TypedDict, Union
 
-# --- Define TypedDicts for clearer data structures ---
-# These help Reflex understand the structure of the data in your state variables,
-# which can prevent 'UntypedVarError' and improve code clarity and maintainability.
+# --- Define TypedDicts for API Response Structures ---
+# These TypedDicts are crucial for strongly typing your data,
+# preventing issues like 'UntypedVarError' and making the code more readable.
 
-class Span(TypedDict):
-    """Expected structure for each detected span."""
-    start: int
-    end: int
-    text: str
-    # Add other fields if your span detection returns them, e.g., 'type', 'label'
-
+# 1. Spans API Response Structure (from /get_spans)
+class APISpan(TypedDict):
+    """Represents a single detected span."""
+    label: str
+    type: str
 class Candidate(TypedDict):
-    """Expected structure for each fetched candidate."""
-    span_index: int # Assuming you might include an index to link back to the span
-    entity_uri: str
-    score: float
-    # Add other fields if your candidate fetching returns them
+    """Represents a candidate entity with its score."""
+    span_id: int  # Index of the span this candidate belongs to
+    uri: str
+    label: str
+    type: str
 
-class FinalResult(TypedDict):
-    """Expected structure for each final linked result."""
-    id: str # Assuming this is like an entity URI or ID
-    answer: str # Assuming this is the label or main text for the linked entity
-    confidence: float
-    # Add other fields as per your final reranking output
+class FinalResultAtom(TypedDict):
+    """Represents a single final result with its score."""
+    uri: str
+    label: str
+    type: str
+    sentence: str
+    score: float 
+    span_id: int
+
 
 # --- Reflex State Definition ---
 class State(rx.State):
@@ -35,10 +37,9 @@ class State(rx.State):
     text: str = "" # The input text from the user
     
     # State variables to store results from each API stage
-    spans: List[Span] = []
-    candidates: List[Candidate] = []
-    final_results: List[FinalResult] = []
-    
+    spans: List[APISpan] = []
+    candidates: List[Candidate] = [] # List to hold candidates for each span
+    final_results: List[FinalResultAtom] = [] # Final linked results after processing candidates
     updates: List[str] = [] # To store sequential update messages for the log display
     
     is_loading: bool = False # Controls the loading spinner and button state
@@ -101,8 +102,8 @@ class State(rx.State):
             yield
             return
 
-        # --- Stage 2: Get Candidates ---
-        # Only proceed if spans were successfully retrieved
+#       --- Stage 2: Get Candidates ---
+#      Only proceed if spans were successfully retrieved
         if self.spans:
             try:
                 self.updates.append("Requesting candidates from API...")
@@ -114,8 +115,13 @@ class State(rx.State):
                         timeout=10.0
                     )
                 response.raise_for_status()
-                self.candidates = response.json()
-                self.updates.append(f"Candidates received ({len(self.candidates)} found).")
+                candidates = response.json()
+                self.updates.append(f"Candidates received ({len(candidates)} found).")
+                flat_candidates = [
+                    {"span_id":idx, "uri": uri, "label": label, "type": type_}
+                    for idx,group in enumerate(candidates)
+                    for uri, label, type_ in group]
+                self.candidates = flat_candidates # Flatten the nested structure
                 yield # Update log and display candidates table if ready
             except httpx.RequestError as e:
                 self.error_message = f"Network or API connection error during candidate fetching: {str(e)}"
@@ -157,12 +163,22 @@ class State(rx.State):
                         json={
                             "question": self.text, 
                             "spans": self.spans, 
-                            "entity_candidates": self.candidates # Pass candidates from previous step
+                            "entity_candidates": candidates # Pass candidates from previous step, not self.candidates
                         },
                         timeout=30.0 # Increased timeout for potentially longer final processing
                     )
                 response.raise_for_status()
-                self.final_results = response.json()
+                final_results = response.json()
+                self.final_results = [
+                    FinalResultAtom(
+                        uri=atom[1][0],
+                        label=atom[1][1],
+                        type=atom[1][2],
+                        sentence=atom[1][3],  # Include the original question as the sentence
+                        score=atom[0],  # Use .get() to avoid KeyError
+                        span_id=idx  # Default to -1 if not present
+                    ) for idx,result in enumerate(final_results['entitylinkingresults']) for atom in result['result']
+                ]
                 self.updates.append("Final results received.")
                 yield # Update log and display final results table if ready
             except httpx.RequestError as e:
@@ -201,18 +217,16 @@ def render_spans_table() -> rx.Component:
     return rx.table.root(
         rx.table.header(
             rx.table.row(
-                rx.table.column_header_cell("Start"),
-                rx.table.column_header_cell("End"),
-                rx.table.column_header_cell("Text"),
+                rx.table.column_header_cell("Label"),
+                rx.table.column_header_cell("Type"),
             )
         ),
         rx.table.body(
             rx.foreach(
                 State.spans,
                 lambda span: rx.table.row(
-                    rx.table.cell(str(span.get("start", ""))),
-                    rx.table.cell(str(span.get("end", ""))),
-                    rx.table.cell(span.get("text", "")),
+                    rx.table.cell(span["label"]),
+                    rx.table.cell(span["type"]),
                 ),
             )
         ),
@@ -224,22 +238,23 @@ def render_spans_table() -> rx.Component:
 
 
 def render_candidates_table() -> rx.Component:
-    """Renders a table for fetched candidates."""
     return rx.table.root(
         rx.table.header(
             rx.table.row(
-                rx.table.column_header_cell("Span Index"),
+                rx.table.column_header_cell("Span ID"),
                 rx.table.column_header_cell("Entity URI"),
-                rx.table.column_header_cell("Score"),
+                rx.table.column_header_cell("Entity Label"),
+                rx.table.column_header_cell("Entity Type"),
             )
         ),
         rx.table.body(
             rx.foreach(
-                State.candidates,
+                State.candidates,  # Now a flat list of dicts
                 lambda candidate: rx.table.row(
-                    rx.table.cell(str(candidate.get("span_index", ""))),
-                    rx.table.cell(candidate.get("entity_uri", "")),
-                    rx.table.cell(f"{candidate.get('score', 0.0):.4f}"), # Format score for display
+                    rx.table.cell(candidate["span_id"]),  # Display span ID
+                    rx.table.cell(candidate["uri"]),
+                    rx.table.cell(candidate["label"]),
+                    rx.table.cell(candidate["type"]),
                 ),
             )
         ),
@@ -250,24 +265,39 @@ def render_candidates_table() -> rx.Component:
     )
 
 
+
 def render_final_results_table() -> rx.Component:
     """Renders a table for final linked results."""
     return rx.table.root(
         rx.table.header(
             rx.table.row(
-                rx.table.column_header_cell("Result ID"),
-                rx.table.column_header_cell("Answer"),
-                rx.table.column_header_cell("Confidence"),
+                rx.table.column_header_cell("Span ID"),
+                rx.table.column_header_cell("Label"),
+                rx.table.column_header_cell("Type"),
+                rx.table.column_header_cell("Score"),
+                rx.table.column_header_cell("Evidence Sentence"),
+                rx.table.column_header_cell("URI"),
             )
         ),
         rx.table.body(
             rx.foreach(
                 State.final_results,
                 lambda result: rx.table.row(
-                    rx.table.cell(str(result.get("id", ""))),
-                    rx.table.cell(str(result.get("answer", ""))),
-                    rx.table.cell(f"{result.get('confidence', 0.0):.4f}"), # Format confidence
-                ),
+                    rx.table.cell(result.span_id),
+                    rx.table.cell(result.label),
+                    rx.table.cell(result.type),
+                    rx.table.cell(f"{result.score:.4f}"),
+                    rx.table.cell(result.sentence),
+                    rx.table.cell(
+                        rx.link(
+                            result.uri,
+                            href=result.uri,
+                            is_external=True,
+                            color="blue",
+                            text_decoration="underline"
+                        )
+                    ),
+                )
             )
         ),
         variant="surface",
