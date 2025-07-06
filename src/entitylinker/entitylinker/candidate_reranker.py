@@ -64,7 +64,7 @@ class CandidateReranker:
         # Add " Yes" to each input
         full_inputs = [self.format_input(mention, context, entity_name, entity_info_line) + " Yes" for entity_info_line in entity_info_lines]
         #print("Full Inputs for scoring:", full_inputs)
-        inputs = self.tokenizer(full_inputs, return_tensors='pt', padding=True, truncation=True, max_length=256).to(self.device)
+        inputs = self.tokenizer(full_inputs, return_tensors='pt', padding=True, truncation=True, max_length=128).to(self.device)
 
         with torch.no_grad():
             outputs = self.model(**inputs)

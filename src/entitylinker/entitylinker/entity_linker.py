@@ -4,17 +4,31 @@ import torch
 import re
 from elasticsearch import Elasticsearch
 from entitylinker.candidate_reranker import CandidateReranker
+from transformers import BitsAndBytesConfig
 
+# Inside your __init__ of EntityLinker
+bnb_config = BitsAndBytesConfig(
+    load_in_4bit=True,            # Or use `load_in_8bit=True` for 8-bit
+    bnb_4bit_quant_type="nf4",    # Normal float 4; more accurate than int
+    bnb_4bit_use_double_quant=True,
+    bnb_4bit_compute_dtype=torch.float16
+)
 
 class EntityLinker:    
     def __init__(self, config):
         self.config = config
-        MODEL_NAME = "Qwen/Qwen2.5-1.5B-Instruct"
+        MODEL_NAME = "Qwen/Qwen2.5-7b-Instruct"
+        #MODEL_NAME = "google/gemma-3-4b-it"
         # Load model and tokenizer
         self.tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, trust_remote_code=True)
-        self.model = AutoModelForCausalLM.from_pretrained(MODEL_NAME, trust_remote_code=True).eval()
+        self.model = AutoModelForCausalLM.from_pretrained(
+                        MODEL_NAME,
+                        quantization_config=bnb_config,
+                        device_map="auto",
+                        trust_remote_code=True
+                    ).eval()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.model.to(self.device)
+        #self.model.to(self.device)
         self.es = Elasticsearch(config['elasticsearch'])
         self.candidate_reranker = CandidateReranker(self.model, self.tokenizer, config, self.device)
 

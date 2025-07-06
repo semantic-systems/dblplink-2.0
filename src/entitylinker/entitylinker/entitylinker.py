@@ -257,6 +257,7 @@ def render_default_questions() -> rx.Component:
     examples = [
         "Who is the CEO of Apple?",
         "What papers did Chris Biemann publish?",
+        "which papers did Debayan Banerjee publish at SIGIR?",
         "Which universities are in Vienna?",
     ]
     return rx.hstack(
@@ -374,7 +375,7 @@ def render_final_results_table() -> rx.Component:
 def index() -> rx.Component:
     return rx.container(
         rx.vstack(
-            rx.heading("Entity Linker (Sequential HTTP Requests)", size="7", mb="4", color="blue.800"),
+            rx.heading("DBLPLink 2.0 Entity Linker (Entity Linker for the DBLP Knowledge Graph)", size="7", mb="4", color="blue.800"),
             rx.text(
                 "Enter a natural language question to extract and link entities.",
                 color="gray.700",
