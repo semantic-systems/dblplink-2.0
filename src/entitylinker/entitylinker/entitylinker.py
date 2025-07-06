@@ -41,9 +41,17 @@ class State(rx.State):
     candidates: List[Candidate] = [] # List to hold candidates for each span
     final_results: List[FinalResultAtom] = [] # Final linked results after processing candidates
     updates: List[str] = [] # To store sequential update messages for the log display
+    progress: int = 0  # Progress percentage (0-100)
     
     is_loading: bool = False # Controls the loading spinner and button state
     error_message: str = "" # Stores and displays any errors that occur
+
+    def set_text(self, text: str):
+        """
+        Updates the input text state.
+        This is called when the user types in the text area.
+        """
+        self.text = text
 
     async def send_text(self):
         """
@@ -61,6 +69,7 @@ class State(rx.State):
 
         # --- Stage 1: Get Spans ---
         try:
+            self.progress = 0
             self.updates.append("Requesting detected spans from API...")
             yield # Update log
             async with httpx.AsyncClient() as client:
@@ -72,12 +81,14 @@ class State(rx.State):
             response.raise_for_status() # Raise an HTTPStatusError for 4xx/5xx responses
             self.spans = response.json() # Parse JSON response
             self.updates.append(f"Spans received ({len(self.spans)} found).")
+            self.progress = 33
             yield # Update log and display spans table if ready
         except httpx.RequestError as e:
             # Catch network errors (e.g., connection refused, timeout)
             self.error_message = f"Network or API connection error during span detection: {str(e)}"
             self.updates.append(self.error_message)
             self.is_loading = False # Stop loading
+            self.progress = 0
             yield
             return # Stop further processing on critical error
         except json.JSONDecodeError:
@@ -85,6 +96,7 @@ class State(rx.State):
             self.error_message = "Invalid JSON response received for spans."
             self.updates.append(self.error_message)
             self.is_loading = False
+            self.progress = 0
             yield
             return
         except httpx.HTTPStatusError as e:
@@ -92,6 +104,7 @@ class State(rx.State):
             self.error_message = f"API error getting spans (Status: {e.response.status_code}): {e.response.text}"
             self.updates.append(self.error_message)
             self.is_loading = False
+            self.progress = 0
             yield
             return
         except Exception as e:
@@ -99,6 +112,7 @@ class State(rx.State):
             self.error_message = f"An unexpected error occurred during span detection: {str(e)}"
             self.updates.append(self.error_message)
             self.is_loading = False
+            self.progress = 0
             yield
             return
 
@@ -122,29 +136,34 @@ class State(rx.State):
                     for idx,group in enumerate(candidates)
                     for uri, label, type_ in group]
                 self.candidates = flat_candidates # Flatten the nested structure
+                self.progress = 66
                 yield # Update log and display candidates table if ready
             except httpx.RequestError as e:
                 self.error_message = f"Network or API connection error during candidate fetching: {str(e)}"
                 self.updates.append(self.error_message)
                 self.is_loading = False
+                self.progress = 33
                 yield
                 return
             except json.JSONDecodeError:
                 self.error_message = "Invalid JSON response received for candidates."
                 self.updates.append(self.error_message)
                 self.is_loading = False
+                self.progress = 33
                 yield
                 return
             except httpx.HTTPStatusError as e:
                 self.error_message = f"API error getting candidates (Status: {e.response.status_code}): {e.response.text}"
                 self.updates.append(self.error_message)
                 self.is_loading = False
+                self.progress = 33
                 yield
                 return
             except Exception as e:
                 self.error_message = f"An unexpected error occurred during candidate fetching: {str(e)}"
                 self.updates.append(self.error_message)
                 self.is_loading = False
+                self.progress = 33
                 yield
                 return
         else:
@@ -180,22 +199,27 @@ class State(rx.State):
                     ) for idx,result in enumerate(final_results['entitylinkingresults']) for atom in result['result']
                 ]
                 self.updates.append("Final results received.")
+                self.progress = 100
                 yield # Update log and display final results table if ready
             except httpx.RequestError as e:
                 self.error_message = f"Network or API connection error during final result processing: {str(e)}"
                 self.updates.append(self.error_message)
+                self.progress = 66
                 yield
             except json.JSONDecodeError:
                 self.error_message = "Invalid JSON response received for final results."
                 self.updates.append(self.error_message)
+                self.progress = 66
                 yield
             except httpx.HTTPStatusError as e:
                 self.error_message = f"API error getting final results (Status: {e.response.status_code}): {e.response.text}"
                 self.updates.append(self.error_message)
+                self.progress = 66
                 yield
             except Exception as e:
                 self.error_message = f"An unexpected error occurred during final result processing: {str(e)}"
                 self.updates.append(self.error_message)
+                self.progress = 66
                 # Keep traceback print for server-side debugging, not for frontend display usually
                 # import traceback
                 # self.updates.append(traceback.format_exc()) 
@@ -211,6 +235,46 @@ class State(rx.State):
 
 
 # --- UI Components ---
+
+
+def render_collapsible(title: str, content: rx.Component) -> rx.Component:
+    """Renders collapsible sections that are collapsed by default."""
+    return rx.accordion.root(
+        rx.accordion.item(
+            rx.accordion.trigger(rx.text(title, font_weight="bold", color="blue.700")),
+            rx.accordion.content(content),
+            value=title,
+        ),
+        type="single",
+        collapsible=True,
+        default_value="",  # Start collapsed
+        width="100%",
+        mb="4",
+    )
+
+def render_default_questions() -> rx.Component:
+    """Provides default example questions as clickable buttons."""
+    examples = [
+        "Who is the CEO of Apple?",
+        "What papers did Chris Biemann publish?",
+        "Which universities are in Vienna?",
+    ]
+    return rx.hstack(
+        *[
+            rx.button(
+                q,
+                size="1",
+                variant="outline",
+                # Accept the event as 'e', then call set_text with the question string
+                on_click=lambda e, q=q: State.set_text(q),
+                color_scheme="gray",
+            ) for q in examples
+        ],
+        spacing="2",
+        mb="4",
+        wrap="wrap"
+    )
+
 
 def render_spans_table() -> rx.Component:
     """Renders a table for detected spans."""
@@ -308,40 +372,51 @@ def render_final_results_table() -> rx.Component:
 
 
 def index() -> rx.Component:
-    """The main application page."""
     return rx.container(
         rx.vstack(
             rx.heading("Entity Linker (Sequential HTTP Requests)", size="7", mb="4", color="blue.800"),
             rx.text(
                 "Enter a natural language question to extract and link entities.",
                 color="gray.700",
-                mb="5",
+                mb="3",
                 text_align="center"
             ),
+
+            render_default_questions(),
+
             rx.text_area(
                 placeholder="e.g., When did Chris Biemann publish a paper in ACL?",
                 on_change=State.set_text,
                 value=State.text,
                 width="100%",
-                height="100px",
-                padding="4",
-                border_radius="12px",
-                box_shadow="md",
+                height="60px",  # Adjusted for one-line question
+                padding="3",
+                border_radius="10px",
+                box_shadow="sm",
+                font_size="1em",
                 _focus={"border_color": "blue.500", "box_shadow": "outline"}
             ),
             rx.button(
                 "Submit", 
                 on_click=State.send_text, 
-                mt="4",
-                is_loading=State.is_loading, # Show loading spinner on button
+                mt="3",
+                is_loading=State.is_loading,
                 loading_text="Processing...",
                 color_scheme="blue",
                 size="2"
             ),
-            
-            # Display updates log
-            rx.divider(mt="6", mb="6"), # Increased margin for dividers
-            rx.heading("Process Log", size="4", mb="3", color="gray.700"),
+            rx.cond(
+                State.is_loading,
+                rx.progress(
+                    value=State.progress,
+                    size="3",
+                    color="blue",
+                    mb="4",
+                    show_value=True
+                )
+            ),
+            rx.divider(mt="6", mb="4"),
+            rx.heading("Process Log", size="4", mb="2", color="gray.700"),
             rx.box(
                 rx.foreach(State.updates, lambda update: rx.text(update, font_size="0.9em", color="gray.600")),
                 width="100%",
@@ -354,8 +429,7 @@ def index() -> rx.Component:
                 max_height="200px",
                 box_shadow="sm"
             ),
-            
-            # Display error message
+
             rx.cond(
                 State.error_message != "",
                 rx.box(
@@ -371,53 +445,26 @@ def index() -> rx.Component:
                 )
             ),
 
-            rx.divider(mt="6", mb="6"),
+            rx.divider(mt="6", mb="4"),
 
-            # Conditionally render tables based on data availability
             rx.cond(
-                State.spans.length() > 0, # Use .length() for Reflex Var lists
-                rx.box(
-                    rx.heading("Detected Spans", size="5", mb="3", color="purple.700"),
-                    render_spans_table(),
-                    width="100%",
-                    mt="4" # Add margin top to this box
-                )
+                State.spans.length() > 0,
+                render_collapsible("Detected Spans", render_spans_table())
             ),
             rx.cond(
-                State.candidates.length() > 0, # Use .length()
-                rx.box(
-                    rx.heading("Fetched Candidates", size="5", mb="3", color="green.700"),
-                    render_candidates_table(),
-                    width="100%",
-                    mt="4" # Add margin top to this box
-                )
+                State.candidates.length() > 0,
+                render_collapsible("Fetched Candidates", render_candidates_table())
             ),
             rx.cond(
-                State.final_results.length() > 0, # Use .length()
-                rx.box(
-                    rx.heading("Final Linked Results", size="5", mb="3", color="teal.700"),
-                    render_final_results_table(),
-                    width="100%",
-                    mt="4" # Add margin top to this box
-                )
+                State.final_results.length() > 0,
+                render_collapsible("Final Linked Results", render_final_results_table())
             ),
-            
-            spacing="5", # This `spacing` on the Vstack handles overall vertical gaps between its direct children
-            padding="20px",
-            max_width="900px", # Increased max width for better layout
-            margin_x="auto", # Center horizontally
-            margin_y="50px", # Add vertical margin
-            bg="white",
-            border_radius="16px",
-            box_shadow="lg" # Apply a larger shadow
         ),
-        font_family="Inter, sans-serif", # Use a common sans-serif font
-        bg="gray.50", # Light gray background for the page
-        min_height="100vh", # Ensure it takes full viewport height
-        display="flex",
-        align_items="center",
-        justify_content="center", # Center content vertically and horizontally
+        padding="4",
+        max_width="800px",
+        margin_x="auto"
     )
+
 
 # --- App Initialization ---
 app = rx.App(
