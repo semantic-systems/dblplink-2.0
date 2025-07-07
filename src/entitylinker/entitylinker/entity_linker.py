@@ -113,12 +113,12 @@ class EntityLinker:
         # Placeholder for candidate fetching logic
         return results
     
-    def rerank_candidates(self, text, spans, entity_candidates):
+    def rerank_candidates(self, text, spans, entity_candidates, text_match_only=False):
         """
         Reranks the candidates based on some criteria.
         This is a placeholder implementation.
         """
-        sorted_spans = self.candidate_reranker.rerank_candidates(text, spans, entity_candidates)
+        sorted_spans = self.candidate_reranker.rerank_candidates(text, spans, entity_candidates, text_match_only)
         return sorted_spans
     
 if __name__ == "__main__":

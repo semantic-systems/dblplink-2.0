@@ -172,37 +172,47 @@ class CandidateReranker:
 
 
 
-    def rerank_candidates(self, text, spans, entity_candidates):
+    def rerank_candidates(self, text, spans, entity_candidates, text_match_only):
         """
         Reranks the candidate entities based on their scores.
         Returns a list of tuples (entity_uri, score) sorted by score.
         """
         final_result = {}
         sorted_spans = []
-        for span,entity_uris in zip(spans,entity_candidates):
-            entity_scores = []
-            for entity_uri in entity_uris:
-                print("Fetching one-hop neighbors for entity URI...",entity_uri)
-                start = time.time()
-                left, right = self.fetch_one_hop(entity_uri)
-                end = time.time()
-                print(f"Time taken for neighbourhood: {end - start:.6f} seconds")
-                # Linearize the neighborhood
-                entity_neighborhood = self.linearise_neighbourhood(left, right)
-                if not entity_neighborhood:
-                    print(f"No neighborhood found for entity {entity_uri[0]}")
-                    continue
-                # Score the entity based on its neighborhood
-                start = time.time()
-                print(f"Scoring entity {entity_uri[0]} with neighborhood size {len(entity_neighborhood)}")
-                #score,sentence = self.compute_max_yes_score(span['label'], text, entity_uri[0], entity_neighborhood)
-                score, evidence_sentence = self.compute_avg_yes_score(span['label'], text, entity_uri[0], entity_neighborhood)
-                end = time.time()
-                print(f"Time taken for sorting: {end - start:.6f} seconds")
-                entity_scores.append([score, [entity_uri[0], entity_uri[1], entity_uri[2], evidence_sentence]]) #0 is url, 1 is label, 2 is type
-            # Sort by score in descending order
-            entity_scores.sort(key=lambda x: x[0], reverse=True)
-            sorted_spans.append({'label': span['label'], 'result': entity_scores, 'type': span['type']})
+        if text_match_only:
+            print("Text match only mode enabled. Skipping entity reranking.")
+            for span, entity_uris in zip(spans, entity_candidates):
+                entity_scores = []
+                for entity_uri in entity_uris:
+                    # Here we assume that the score is 1.0 for text match only
+                    # In a real scenario, you might want to compute some score based on text matching
+                    entity_scores.append([-1.0, [entity_uri[0], entity_uri[1], entity_uri[2], ""]])
+                sorted_spans.append({'label': span['label'], 'result': entity_scores, 'type': span['type']})
+        else:
+            for span,entity_uris in zip(spans,entity_candidates):
+                entity_scores = []
+                for entity_uri in entity_uris:
+                    print("Fetching one-hop neighbors for entity URI...",entity_uri)
+                    start = time.time()
+                    left, right = self.fetch_one_hop(entity_uri)
+                    end = time.time()
+                    print(f"Time taken for neighbourhood: {end - start:.6f} seconds")
+                    # Linearize the neighborhood
+                    entity_neighborhood = self.linearise_neighbourhood(left, right)
+                    if not entity_neighborhood:
+                        print(f"No neighborhood found for entity {entity_uri[0]}")
+                        continue
+                    # Score the entity based on its neighborhood
+                    start = time.time()
+                    print(f"Scoring entity {entity_uri[0]} with neighborhood size {len(entity_neighborhood)}")
+                    #score,sentence = self.compute_max_yes_score(span['label'], text, entity_uri[0], entity_neighborhood)
+                    score, evidence_sentence = self.compute_avg_yes_score(span['label'], text, entity_uri[0], entity_neighborhood)
+                    end = time.time()
+                    print(f"Time taken for sorting: {end - start:.6f} seconds")
+                    entity_scores.append([score, [entity_uri[0], entity_uri[1], entity_uri[2], evidence_sentence]]) #0 is url, 1 is label, 2 is type
+                # Sort by score in descending order
+                entity_scores.sort(key=lambda x: x[0], reverse=True)
+                sorted_spans.append({'label': span['label'], 'result': entity_scores, 'type': span['type']})
         final_result['entitylinkingresults'] = sorted_spans
         final_result['predictedlabelspans'] = [span['label'] + ' : ' + span['type'] for span in spans]
         final_result['question'] = text

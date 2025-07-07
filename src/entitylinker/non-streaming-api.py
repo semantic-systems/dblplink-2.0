@@ -77,6 +77,7 @@ def get_final_result():
 def link_entities():
     data = request.get_json()
     text = data.get("question")
+    text_match_only = data.get("text_match_only", False) 
 
     if not text:
         return jsonify({"error": "Missing 'question' field in JSON body"}), 400
@@ -90,7 +91,8 @@ def link_entities():
             uris = [(item['_id'], item['_source']['label'], item['_source']['type']) for item in candidate]
             entity_candidates.append(uris)
 
-        final_result = entity_linker.rerank_candidates(text, spans, entity_candidates)
+        # Pass the new flag to rerank_candidates
+        final_result = entity_linker.rerank_candidates(text, spans, entity_candidates, text_match_only=text_match_only)
         return jsonify(final_result)
 
     except Exception as e:
