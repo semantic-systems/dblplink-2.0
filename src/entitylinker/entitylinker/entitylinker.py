@@ -74,7 +74,7 @@ class State(rx.State):
             yield # Update log
             async with httpx.AsyncClient() as client:
                 response = await client.post(
-                    "http://localhost:5001/get_spans",
+                    "http://localhost:5002/get_spans",
                     json={"question": self.text},
                     timeout=10.0 # Set a timeout for the request
                 )
@@ -124,7 +124,7 @@ class State(rx.State):
                 yield # Update log
                 async with httpx.AsyncClient() as client:
                     response = await client.post(
-                        "http://localhost:5001/get_candidates",
+                        "http://localhost:5002/get_candidates",
                         json={"question": self.text, "spans": self.spans}, # Pass spans from previous step
                         timeout=10.0
                     )
@@ -178,7 +178,7 @@ class State(rx.State):
                 yield # Update log
                 async with httpx.AsyncClient() as client:
                     response = await client.post(
-                        "http://localhost:5001/get_final_result",
+                        "http://localhost:5002/get_final_result",
                         json={
                             "question": self.text, 
                             "spans": self.spans, 
@@ -255,10 +255,10 @@ def render_collapsible(title: str, content: rx.Component) -> rx.Component:
 def render_default_questions() -> rx.Component:
     """Provides default example questions as clickable buttons."""
     examples = [
-        "Who is the CEO of Apple?",
+        "Which papers did Ricardo Usbeck pubish in ISWC?",
         "What papers did Chris Biemann publish?",
         "which papers did Debayan Banerjee publish at SIGIR?",
-        "Which universities are in Vienna?",
+        "When did Tilahun Taffa pulish papers at WWW?",
     ]
     return rx.hstack(
         *[
