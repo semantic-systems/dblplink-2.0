@@ -42,9 +42,9 @@ class EntityLinker:
         {"role": "user", "content": f"""Extract named entities from the following sentence and classify them into one of the following types: person, publication, venue.
          For example:
          Sentence: "Which papers in ICLR 2023 were authored by Banerjee, Debayan?" 
-         Entities: {{"person": "Debayan Banerjee", "venue": "ICLR 2023"}}
+         Entities: [{{"type": "person", "label": "Debayan Banerjee"}},{{"type": "venue", "label": "ICLR 2023"}}]
          Sentence: "Who co-authored the paper 'Modern Baselines for SPARQL Semantic Parsing' with Debayan in SIGIR 2022?"
-         Entities: {{"person": "Debayan Banerjee", "publication": "Modern Baselines for SPARQL Semantic Parsing", "venue": "SIGIR 2022"}}
+         Entities: [{{"type": "person", "label": "Debayan Banerjee"}},{{ "type": "publication", "label": "Modern Baselines for SPARQL Semantic Parsing"}},{{"type": "venue", "label": "SIGIR 2022"}}]
          Now extract entities from the following sentence:
         Sentence: "{text}"
         Entities:"""}
@@ -60,10 +60,10 @@ class EntityLinker:
             )
         decoded_outputs = self.tokenizer.batch_decode(outputs, skip_special_tokens=True)
         output = decoded_outputs[0]
-        json_match = re.search(r'\[\s*{.*?}\s*]', output, re.DOTALL)
+        json_matches = re.findall(r'\[\s*{.*?}\s*]', output, re.DOTALL)
         entities = []
-        if json_match:
-            json_str = json_match.group(0)
+        if json_matches:
+            json_str = json_matches[-1]
             try:
                 entities = json.loads(json_str)
                 print("Extracted entity list:")
@@ -73,9 +73,8 @@ class EntityLinker:
                 print("Raw matched text:\n", json_str)
         else:
             print("No JSON array found in model output.")
-        extracted_spans = entities
         # Placeholder for span detection logic
-        return extracted_spans
+        return entities
     
     def fetch_candidates(self, text, spans):
         """
@@ -90,8 +89,10 @@ class EntityLinker:
                 types = ["https://dblp.org/rdf/schema#Creator", "https://dblp.org/rdf/schema#Person"]
             elif entity_type == "publication":
                 types = ["https://dblp.org/rdf/schema#Book", "https://dblp.org/rdf/schema#Article", "https://dblp.org/rdf/schema#Publication"]
+            #elif entity_type == "venue":
+            #    types = ["https://dblp.org/rdf/schema#Conference", "https://dblp.org/rdf/schema#Incollection", "https://dblp.org/rdf/schema#Inproceedings", "https://dblp.org/rdf/schema#Journal", "https://dblp.org/rdf/schema#Series", "https://dblp.org/rdf/schema#Stream"]
             elif entity_type == "venue":
-                types = ["https://dblp.org/rdf/schema#Conference", "https://dblp.org/rdf/schema#Incollection", "https://dblp.org/rdf/schema#Inproceedings", "https://dblp.org/rdf/schema#Journal", "https://dblp.org/rdf/schema#Series", "https://dblp.org/rdf/schema#Stream"]
+                types = ["https://dblp.org/rdf/schema#Stream"]
             
             label = span['label']
             print(f"Fetching candidates for type: {entity_type}, label: {label}")    
