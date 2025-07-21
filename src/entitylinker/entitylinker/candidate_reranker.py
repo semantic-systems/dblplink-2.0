@@ -28,7 +28,7 @@ class CandidateReranker:
                    Mention: {mention}
                    Candidate Entity: {entity_name}
                    Entity Info: {entity_info_text}
-                   Question: Does the mention belong to this entity?
+                   Question: Does the mention belong to this entity? Answer:yes/no
                    Answer:"""
 
     def compute_avg_yes_score(self, mention, context, entity_name, entity_info_lines):
@@ -36,7 +36,7 @@ class CandidateReranker:
         Computes the average log-probability score for 'Yes' over all entity_info_lines.
         Returns the average score and the top contributing sentence.
         """
-        full_inputs = [self.format_input(mention, context, entity_name, line) + "Yes" for line in entity_info_lines]
+        full_inputs = [self.format_input(mention, context, entity_name, line) + "yes" for line in entity_info_lines]
         inputs = self.tokenizer(full_inputs, return_tensors='pt', padding=True, truncation=True, max_length=128).to(self.device)
 
         with torch.no_grad():
@@ -44,7 +44,7 @@ class CandidateReranker:
             logits = outputs.logits  # (batch_size, seq_len, vocab_size)
 
         log_probs = F.log_softmax(logits, dim=-1)
-        yes_token_id = self.tokenizer("Yes", add_special_tokens=False)["input_ids"][0]
+        yes_token_id = self.tokenizer("yes", add_special_tokens=False)["input_ids"][0]
 
         scores = []
         for i in range(len(full_inputs)):
@@ -62,7 +62,7 @@ class CandidateReranker:
 
     def compute_max_yes_score(self, mention, context, entity_name, entity_info_lines):
         # Add " Yes" to each input
-        full_inputs = [self.format_input(mention, context, entity_name, entity_info_line) + "Yes" for entity_info_line in entity_info_lines]
+        full_inputs = [self.format_input(mention, context, entity_name, entity_info_line) + "yes" for entity_info_line in entity_info_lines]
         #print("Full Inputs for scoring:", full_inputs)
         inputs = self.tokenizer(full_inputs, return_tensors='pt', padding=True, truncation=True, max_length=128).to(self.device)
 
@@ -71,7 +71,7 @@ class CandidateReranker:
             logits = outputs.logits  # (batch_size, seq_len, vocab_size)
 
         log_probs = F.log_softmax(logits, dim=-1)
-        yes_token_id = self.tokenizer("Yes", add_special_tokens=False)["input_ids"][0]
+        yes_token_id = self.tokenizer("yes", add_special_tokens=False)["input_ids"][0]
 
         # Find the log prob of the token " Yes" in each sequence
         scores = []
