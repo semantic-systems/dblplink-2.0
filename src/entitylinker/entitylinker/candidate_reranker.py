@@ -28,7 +28,7 @@ class CandidateReranker:
                    Mention: {mention}
                    Candidate Entity: {entity_name}
                    Entity Info: {entity_info_text}
-                   Question: Does the mention belong to this entity? Answer-Yes/No.
+                   Question: Does the mention belong to this entity?
                    Answer:"""
 
     def compute_avg_yes_score(self, mention, context, entity_name, entity_info_lines):
@@ -36,7 +36,7 @@ class CandidateReranker:
         Computes the average log-probability score for 'Yes' over all entity_info_lines.
         Returns the average score and the top contributing sentence.
         """
-        full_inputs = [self.format_input(mention, context, entity_name, line) + " Yes" for line in entity_info_lines]
+        full_inputs = [self.format_input(mention, context, entity_name, line) + "Yes" for line in entity_info_lines]
         inputs = self.tokenizer(full_inputs, return_tensors='pt', padding=True, truncation=True, max_length=128).to(self.device)
 
         with torch.no_grad():

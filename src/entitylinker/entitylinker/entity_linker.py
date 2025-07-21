@@ -40,9 +40,12 @@ class EntityLinker:
         messages = [
         {"role": "system", "content": "You are an information extraction assistant."},
         {"role": "user", "content": f"""Extract named entities from the following sentence and classify them into one of the following types: person, publication, venue.
-         For example: "Which papers in ICLR 2023 were authored by Banerjee, Debayan?" should return a person entity with type "person" and label "Debayan Banerjee" and venue entity with
-         type "venue" and label "ICLR 2023".
-        Return the result as a JSON array of objects with "type" and "label" fields.
+         For example:
+         Sentence: "Which papers in ICLR 2023 were authored by Banerjee, Debayan?" 
+         Entities: {"person": "Debayan Banerjee", "venue": "ICLR 2023"}
+         Sentence: "Who co-authored the paper 'Modern Baselines for SPARQL Semantic Parsing' with Debayan in SIGIR 2022?"
+         Entities: {"person": "Debayan Banerjee", "publication": "Modern Baselines for SPARQL Semantic Parsing", "venue": "SIGIR 2022"}
+         Now extract entities from the following sentence:
         Sentence: "{text}"
         Entities:"""}
         ]
@@ -88,9 +91,8 @@ class EntityLinker:
             elif entity_type == "publication":
                 types = ["https://dblp.org/rdf/schema#Book", "https://dblp.org/rdf/schema#Article", "https://dblp.org/rdf/schema#Publication"]
             elif entity_type == "venue":
-                types = ["https://dblp.org/rdf/schema#Conference", "https://dblp.org/rdf/schema#Incollection", "https://dblp.org/rdf/schema#Inproceedings", "https://dblp.org/rdf/schema#Journal", "https://dblp.org/rdf/schema#Series", "https://dblp.org/rdf/schema#Stream", "https://dblp.org/rdf/schema#Publication"]
+                types = ["https://dblp.org/rdf/schema#Conference", "https://dblp.org/rdf/schema#Incollection", "https://dblp.org/rdf/schema#Inproceedings", "https://dblp.org/rdf/schema#Journal", "https://dblp.org/rdf/schema#Series", "https://dblp.org/rdf/schema#Stream"]
             
-
             label = span['label']
             print(f"Fetching candidates for type: {entity_type}, label: {label}")    
             query = {
