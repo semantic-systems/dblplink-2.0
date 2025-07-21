@@ -83,30 +83,6 @@ class State(rx.State):
             self.updates.append(f"Spans received ({len(self.spans)} found).")
             self.progress = 33
             yield # Update log and display spans table if ready
-        except httpx.RequestError as e:
-            # Catch network errors (e.g., connection refused, timeout)
-            self.error_message = f"Network or API connection error during span detection: {str(e)}"
-            self.updates.append(self.error_message)
-            self.is_loading = False # Stop loading
-            self.progress = 0
-            yield
-            return # Stop further processing on critical error
-        except json.JSONDecodeError:
-            # Catch errors if the response is not valid JSON
-            self.error_message = "Invalid JSON response received for spans."
-            self.updates.append(self.error_message)
-            self.is_loading = False
-            self.progress = 0
-            yield
-            return
-        except httpx.HTTPStatusError as e:
-            # Catch HTTP errors (e.g., 404, 500 from API)
-            self.error_message = f"API error getting spans (Status: {e.response.status_code}): {e.response.text}"
-            self.updates.append(self.error_message)
-            self.is_loading = False
-            self.progress = 0
-            yield
-            return
         except Exception as e:
             # Catch any other unexpected errors
             self.error_message = f"An unexpected error occurred during span detection: {str(e)}"
@@ -138,27 +114,6 @@ class State(rx.State):
                 self.candidates = flat_candidates # Flatten the nested structure
                 self.progress = 66
                 yield # Update log and display candidates table if ready
-            except httpx.RequestError as e:
-                self.error_message = f"Network or API connection error during candidate fetching: {str(e)}"
-                self.updates.append(self.error_message)
-                self.is_loading = False
-                self.progress = 33
-                yield
-                return
-            except json.JSONDecodeError:
-                self.error_message = "Invalid JSON response received for candidates."
-                self.updates.append(self.error_message)
-                self.is_loading = False
-                self.progress = 33
-                yield
-                return
-            except httpx.HTTPStatusError as e:
-                self.error_message = f"API error getting candidates (Status: {e.response.status_code}): {e.response.text}"
-                self.updates.append(self.error_message)
-                self.is_loading = False
-                self.progress = 33
-                yield
-                return
             except Exception as e:
                 self.error_message = f"An unexpected error occurred during candidate fetching: {str(e)}"
                 self.updates.append(self.error_message)
@@ -201,21 +156,6 @@ class State(rx.State):
                 self.updates.append("Final results received.")
                 self.progress = 100
                 yield # Update log and display final results table if ready
-            except httpx.RequestError as e:
-                self.error_message = f"Network or API connection error during final result processing: {str(e)}"
-                self.updates.append(self.error_message)
-                self.progress = 66
-                yield
-            except json.JSONDecodeError:
-                self.error_message = "Invalid JSON response received for final results."
-                self.updates.append(self.error_message)
-                self.progress = 66
-                yield
-            except httpx.HTTPStatusError as e:
-                self.error_message = f"API error getting final results (Status: {e.response.status_code}): {e.response.text}"
-                self.updates.append(self.error_message)
-                self.progress = 66
-                yield
             except Exception as e:
                 self.error_message = f"An unexpected error occurred during final result processing: {str(e)}"
                 self.updates.append(self.error_message)

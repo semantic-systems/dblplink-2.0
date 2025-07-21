@@ -23,20 +23,23 @@ class CandidateReranker:
     def format_input(self, mention, context, entity_name, entity_info_line):
         entity_info_text = entity_info_line
         #print(entity_info_text)
-        return f"""You are an assistant linking mentions to entities.
-                   Document: {context}
-                   Mention: {mention}
-                   Candidate Entity: {entity_name}
-                   Entity Info: {entity_info_text}
-                   Question: Does the mention belong to this entity? Answer:yes/no
-                   Answer:"""
-
+        return (
+        f"You are an assistant linking mentions to entities.\n"
+        f"Document: {context}\n"
+        f"Mention: {mention}\n"
+        f"Candidate Entity: {entity_name}\n"
+        f"Entity Info: {entity_info_text}\n"
+        f"Question: Does the mention belong to this entity? Answer: yes/no\n"
+        f"Answer:"
+    )
     def compute_avg_yes_score(self, mention, context, entity_name, entity_info_lines):
         """
-        Computes the average log-probability score for 'Yes' over all entity_info_lines.
+        Computes the average log-probability score for 'yes' as the next token
+        over all entity_info_lines.
         Returns the average score and the top contributing sentence.
         """
-        full_inputs = [self.format_input(mention, context, entity_name, line) + "yes" for line in entity_info_lines]
+        # Important: do NOT include 'yes' in the prompt
+        full_inputs = [self.format_input(mention, context, entity_name, line) for line in entity_info_lines]
         inputs = self.tokenizer(full_inputs, return_tensors='pt', padding=True, truncation=True, max_length=128).to(self.device)
 
         with torch.no_grad():
@@ -48,49 +51,18 @@ class CandidateReranker:
 
         scores = []
         for i in range(len(full_inputs)):
-            yes_pos = (inputs.input_ids[i] == yes_token_id).nonzero(as_tuple=True)[0]
-            if len(yes_pos) == 0:
-                yes_logprob = log_probs[i, -2, yes_token_id].item()
-            else:
-                yes_logprob = log_probs[i, yes_pos[0], yes_token_id].item()
+            # Length of the input without padding
+            attention_mask = inputs.attention_mask[i]
+            input_len = attention_mask.sum().item()
+
+            # Log-probability of 'yes' as the next token
+            yes_logprob = log_probs[i, input_len - 1, yes_token_id].item()
             scores.append(yes_logprob)
 
         avg_score = float(np.mean(scores))
         best_index = scores.index(max(scores))
         best_sentence = entity_info_lines[best_index]
         return avg_score, best_sentence
-
-    def compute_max_yes_score(self, mention, context, entity_name, entity_info_lines):
-        # Add " Yes" to each input
-        full_inputs = [self.format_input(mention, context, entity_name, entity_info_line) + "yes" for entity_info_line in entity_info_lines]
-        #print("Full Inputs for scoring:", full_inputs)
-        inputs = self.tokenizer(full_inputs, return_tensors='pt', padding=True, truncation=True, max_length=128).to(self.device)
-
-        with torch.no_grad():
-            outputs = self.model(**inputs)
-            logits = outputs.logits  # (batch_size, seq_len, vocab_size)
-
-        log_probs = F.log_softmax(logits, dim=-1)
-        yes_token_id = self.tokenizer("yes", add_special_tokens=False)["input_ids"][0]
-
-        # Find the log prob of the token " Yes" in each sequence
-        scores = []
-        for i in range(len(full_inputs)):
-            # Find the position of the " Yes" token in input_ids
-            yes_pos = (inputs.input_ids[i] == yes_token_id).nonzero(as_tuple=True)[0]
-            if len(yes_pos) == 0:
-                # fallback to second last token if " Yes" is not found
-                yes_logprob = log_probs[i, -2, yes_token_id].item()
-            else:
-                yes_logprob = log_probs[i, yes_pos[0], yes_token_id].item()
-            scores.append(yes_logprob)
-        max_score = max(scores)
-        best_index = scores.index(max_score)
-        best_sentence = entity_info_lines[best_index]
-        # print("entity", entity_name)
-        # print("entity info line", entity_info_lines)
-        # print("best sentence", best_sentence)
-        return max_score, best_sentence
 
     def fetch_one_hop(self, entity_uri):
         """
