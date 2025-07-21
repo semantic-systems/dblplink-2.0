@@ -40,7 +40,7 @@ class CandidateReranker:
         """
         # Important: do NOT include 'yes' in the prompt
         full_inputs = [self.format_input(mention, context, entity_name, line) for line in entity_info_lines]
-        inputs = self.tokenizer(full_inputs, return_tensors='pt', padding=True, truncation=True, max_length=128).to(self.device)
+        inputs = self.tokenizer(full_inputs, return_tensors='pt', padding=True, truncation=True, max_length=256).to(self.device)
 
         with torch.no_grad():
             outputs = self.model(**inputs)
@@ -141,8 +141,6 @@ class CandidateReranker:
                 triples.append(triple)
 
         return triples
-
-
 
     def rerank_candidates(self, text, spans, entity_candidates, text_match_only):
         """

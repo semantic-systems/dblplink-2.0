@@ -177,6 +177,155 @@ class State(rx.State):
 # --- UI Components ---
 
 
+def about() -> rx.Component:
+    return rx.container(
+        rx.vstack(
+            navbar(),
+            rx.heading("About DBLPLink 2.0", size="7", mb="4", color="blue.800"),
+            rx.text(
+                "DBLPLink 2.0 is an advanced entity linker for the DBLP Knowledge Graph, "
+                "designed to extract and link entities from natural language questions.",
+                color="gray.700",
+                mb="3",
+                text_align="center"
+            ),
+            rx.text(
+                "This application allows users to input questions and receive linked entities "
+                "from the DBLP dataset, enhancing research and information retrieval.",
+                color="gray.600",
+                mb="3",
+                text_align="center"
+            ),
+        ),
+        padding="4",
+        max_width="800px",
+        margin_x="auto"
+    )
+def api() -> rx.Component:
+    return rx.container(
+        rx.vstack(
+            navbar(),
+            rx.heading("API Documentation", size="7", mb="4", color="blue.800"),
+            rx.text(
+                "DBLPLink 2.0 provides a RESTful API for entity linking tasks.",
+                color="gray.700",
+                mb="3",
+                text_align="center"
+            ),
+            rx.text(
+                "You can interact with the following endpoints:",
+                color="gray.600",
+                mb="3",
+                text_align="center"
+            ),
+            rx.unordered_list(
+                rx.list_item("POST /get_spans - Detects spans in the input text."),
+                rx.list_item("POST /get_candidates - Fetches candidate entities for detected spans."),
+                rx.list_item("POST /get_final_result - Reranks candidates and returns final linked results.")
+            ),
+        ),
+        padding="4",
+        max_width="800px",
+        margin_x="auto"
+    )
+def contact() -> rx.Component:
+    return rx.container(
+        rx.vstack(
+            navbar(),
+            rx.heading("Contact Us", size="7", mb="4", color="blue.800"),
+            rx.text(
+                "For inquiries or support, please reach out to us at:",
+                color="gray.700",
+                mb="3",
+                text_align="center"
+            ),
+            rx.text(
+                "Email: debayan.banerjee AT leuphana DOT de",
+                color="gray.600",
+                mb="3",
+                text_align="center"
+            ),
+            rx.text(
+                "We welcome feedback and contributions to improve DBLPLink 2.0.",
+                color="gray.600",
+                mb="3",
+                text_align="center"
+            ),
+        ),
+        padding="4",
+        max_width="800px",
+        margin_x="auto"
+    )   
+
+
+def navbar_link(text: str, url: str) -> rx.Component:
+    return rx.link(
+        rx.text(text, size="4", weight="medium"), href=url
+    )
+
+
+def navbar() -> rx.Component:
+    return rx.box(
+        rx.desktop_only(
+            rx.hstack(
+                rx.hstack(
+                    
+                    rx.heading(
+                        "DBLPLink 2.0", size="7", weight="bold"
+                    ),
+                    align_items="center",
+                ),
+                rx.hstack(
+                    navbar_link("Home", "/"),
+                    navbar_link("About", "/about"),
+                    navbar_link("API", "/api"),
+                    navbar_link("Contact", "/contact"),
+                    justify="end",
+                    spacing="5",
+                ),
+                justify="between",
+                align_items="center",
+            ),
+        ),
+        rx.mobile_and_tablet(
+            rx.hstack(
+                rx.hstack(
+                    rx.image(
+                        src="/logo.jpg",
+                        width="2em",
+                        height="auto",
+                        border_radius="25%",
+                    ),
+                    rx.heading(
+                        "Reflex", size="6", weight="bold"
+                    ),
+                    align_items="center",
+                ),
+                rx.menu.root(
+                    rx.menu.trigger(
+                        rx.icon("menu", size=30)
+                    ),
+                    rx.menu.content(
+                        rx.menu.item("Home"),
+                        rx.menu.item("About"),
+                        rx.menu.item("API"),
+                        rx.menu.item("Contact"),
+                    ),
+                    justify="end",
+                ),
+                justify="between",
+                align_items="center",
+            ),
+        ),
+        bg=rx.color("accent", 3),
+        padding="1em",
+        # position="fixed",
+        # top="0px",
+        # z_index="5",
+        width="100%",
+    )
+
+
 def render_collapsible(title: str, content: rx.Component) -> rx.Component:
     """Renders collapsible sections that are collapsed by default."""
     return rx.accordion.root(
@@ -315,39 +464,67 @@ def render_final_results_table() -> rx.Component:
 def index() -> rx.Component:
     return rx.container(
         rx.vstack(
-            rx.heading("DBLPLink 2.0 Entity Linker (Entity Linker for the DBLP Knowledge Graph)", size="7", mb="4", color="blue.800"),
-            rx.text(
-                "Enter a natural language question to extract and link entities.",
-                color="gray.700",
-                mb="3",
-                text_align="center"
-            ),
+            navbar(),
+            rx.heading("Entity Linker for the DBLP Knowledge Graph", size="7", mb="4", color="blue.800", align_self="center"),
+            rx.hstack(
+                rx.vstack(
+                    rx.text(
+                        "Enter a natural language question to extract and link entities.",
+                        color="gray.700",
+                        mb="3",
+                        text_align="center"
+                    ),
 
-            render_default_questions(),
+                    render_default_questions(),
 
-            rx.text_area(
-                placeholder="e.g., When did Chris Biemann publish a paper in ACL?",
-                on_change=State.set_text,
-                value=State.text,
-                width="100%",
-                height="60px",  # Adjusted for one-line question
-                padding="3",
-                border_radius="10px",
-                box_shadow="sm",
-                font_size="1em",
-                _focus={"border_color": "blue.500", "box_shadow": "outline"}
-            ),
-            rx.button(
-                "Submit", 
-                on_click=State.send_text, 
-                mt="3",
-                is_loading=State.is_loading,
-                loading_text="Processing...",
-                color_scheme="blue",
-                size="2"
+                    rx.text_area(
+                        placeholder="e.g., When did Chris Biemann publish a paper in ACL?",
+                        on_change=State.set_text,
+                        value=State.text,
+                        width="100%",
+                        height="60px",  # Adjusted for one-line question
+                        padding="3",
+                        border_radius="10px",
+                        box_shadow="sm",
+                        font_size="1em",
+                        _focus={"border_color": "blue.500", "box_shadow": "outline"}
+                    ),
+                    rx.button(
+                        "Submit", 
+                        on_click=State.send_text, 
+                        mt="3",
+                        is_loading=State.is_loading,
+                        loading_text="Processing...",
+                        color_scheme="blue",
+                        size="2"
+                    ),
+                    width="50%",
+                    padding="4"
+                ),
+                rx.vstack(
+                    rx.heading("Process Log", size="4", mb="2", color="gray.700",font_weight="normal"),
+                    rx.box(
+                        rx.foreach(State.updates, lambda update: rx.text(update, font_size="0.9em", color="gray.600")),
+                        width="100%",
+                        min_height="50px",
+                        padding="3",
+                        border="1px solid #e0e0e0",
+                        border_radius="8px",
+                        bg="white",
+                        overflow_y="auto",
+                        max_height="200px",
+                        box_shadow="sm"
+                    ),
+
+                    width="50%",
+                    padding="4"
+                ),
+                padding="4",
+                max_width="800px",
+                margin_x="auto"
             ),
             rx.cond(
-                State.is_loading,
+                State.progress > 0,
                 rx.progress(
                     value=State.progress,
                     size="3",
@@ -356,21 +533,6 @@ def index() -> rx.Component:
                     show_value=True
                 )
             ),
-            rx.divider(mt="6", mb="4"),
-            rx.heading("Process Log", size="4", mb="2", color="gray.700"),
-            rx.box(
-                rx.foreach(State.updates, lambda update: rx.text(update, font_size="0.9em", color="gray.600")),
-                width="100%",
-                min_height="50px",
-                padding="3",
-                border="1px solid #e0e0e0",
-                border_radius="8px",
-                bg="white",
-                overflow_y="auto",
-                max_height="200px",
-                box_shadow="sm"
-            ),
-
             rx.cond(
                 State.error_message != "",
                 rx.box(
@@ -385,25 +547,31 @@ def index() -> rx.Component:
                     width="100%"
                 )
             ),
-
-            rx.divider(mt="6", mb="4"),
-
             rx.cond(
                 State.spans.length() > 0,
-                render_collapsible("Detected Spans", render_spans_table())
+                rx.box(
+                    render_collapsible("Detected Spans", render_spans_table()),
+                    align_self="start",
+                    mt="4"
+                )
             ),
-            rx.cond(
+                rx.cond(
                 State.candidates.length() > 0,
-                render_collapsible("Fetched Candidates", render_candidates_table())
+                rx.box(
+                    render_collapsible("Fetched Candidates", render_candidates_table()),
+                    align_self="start",
+                    mt="4"
+                )
             ),
             rx.cond(
                 State.final_results.length() > 0,
-                render_collapsible("Final Linked Results", render_final_results_table())
+                rx.box(
+                    render_collapsible("Final Linked Results", render_final_results_table()),
+                    
+                    mt="4"
+                )
             ),
-        ),
-        padding="4",
-        max_width="800px",
-        margin_x="auto"
+        ),                         
     )
 
 
@@ -416,4 +584,7 @@ app = rx.App(
         scaling="95%", # Overall scaling for components
     ),
 )
-app.add_page(index, title="DBLP Entity Linker")
+app.add_page(index, title="DBLPLink 2.0 Entity Linker")
+app.add_page(about)
+app.add_page(api)
+app.add_page(contact)
