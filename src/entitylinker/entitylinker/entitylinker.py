@@ -344,10 +344,10 @@ def render_collapsible(title: str, content: rx.Component) -> rx.Component:
 def render_default_questions() -> rx.Component:
     """Provides default example questions as clickable buttons."""
     examples = [
-        "Which papers did Ricardo Usbeck pubish in ISWC?",
+        "Which papers did Ricardo Usbeck publish in ISWC?",
         "What papers did Chris Biemann publish?",
-        "which papers did Debayan Banerjee publish at SIGIR?",
-        "When did Tilahun Taffa pulish papers at WWW?",
+        "Which papers did Debayan Banerjee publish at SIGIR?",
+        "When did Tilahun Taffa publish papers at WWW?",
     ]
     return rx.hstack(
         *[
