@@ -42,9 +42,9 @@ class EntityLinker:
         {"role": "user", "content": f"""Extract named entities from the following sentence and classify them into one of the following types: person, publication, venue.
          For example:
          Sentence: "Which papers in ICLR 2023 were authored by Banerjee, Debayan?" 
-         Entities: {"person": "Debayan Banerjee", "venue": "ICLR 2023"}
+         Entities: {{"person": "Debayan Banerjee", "venue": "ICLR 2023"}}
          Sentence: "Who co-authored the paper 'Modern Baselines for SPARQL Semantic Parsing' with Debayan in SIGIR 2022?"
-         Entities: {"person": "Debayan Banerjee", "publication": "Modern Baselines for SPARQL Semantic Parsing", "venue": "SIGIR 2022"}
+         Entities: {{"person": "Debayan Banerjee", "publication": "Modern Baselines for SPARQL Semantic Parsing", "venue": "SIGIR 2022"}}
          Now extract entities from the following sentence:
         Sentence: "{text}"
         Entities:"""}
