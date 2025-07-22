@@ -173,9 +173,7 @@ class State(rx.State):
         self.updates.append("Process completed.")
         yield # Ensures all final state changes are pushed to the frontend
 
-
 # --- UI Components ---
-
 
 def about() -> rx.Component:
     return rx.container(

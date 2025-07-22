@@ -17,8 +17,8 @@ bnb_config = BitsAndBytesConfig(
 class EntityLinker:    
     def __init__(self, config):
         self.config = config
-        MODEL_NAME = "Qwen/Qwen2.5-7b-Instruct"
-        #MODEL_NAME = "google/gemma-3-4b-it"
+        MODEL_NAME = "Qwen/Qwen2.5-3b-Instruct"
+        #MODEL_NAME = "mistralai/Mistral-7B-Instruct-v0.2"
         # Load model and tokenizer
         self.tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, trust_remote_code=True)
         self.model = AutoModelForCausalLM.from_pretrained(
@@ -40,15 +40,11 @@ class EntityLinker:
         messages = [
         {"role": "system", "content": "You are an information extraction assistant."},
         {"role": "user", "content": f"""Extract named entities from the following sentence and classify them into one of the following types: person, publication, venue.
-         For example:
-         Sentence: "Which papers in ICLR 2023 were authored by Banerjee, Debayan?" 
-         Entities: [{{"type": "person", "label": "Debayan Banerjee"}},{{"type": "venue", "label": "ICLR 2023"}}]
-         Sentence: "Who co-authored the paper 'Modern Baselines for SPARQL Semantic Parsing' with Debayan in SIGIR 2022?"
-         Entities: [{{"type": "person", "label": "Debayan Banerjee"}},{{ "type": "publication", "label": "Modern Baselines for SPARQL Semantic Parsing"}},{{"type": "venue", "label": "SIGIR 2022"}}]
-         Now extract entities from the following sentence:
+         Let the output be a JSON array of objects with fields 'label' and 'type'.
         Sentence: "{text}"
         Entities:"""}
         ]
+        self.tokenizer.pad_token = self.tokenizer.eos_token
         prompt = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         inputs = self.tokenizer([prompt], return_tensors="pt", padding=True, truncation=True).to(self.device)
         with torch.no_grad():

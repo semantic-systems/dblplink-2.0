@@ -32,6 +32,39 @@ class CandidateReranker:
         f"Question: Does the mention belong to this entity? Answer: yes/no\n"
         f"Answer:"
     )
+
+    def compute_max_yes_score(self, mention, context, entity_name, entity_info_lines):
+        """
+        Computes the maximum log-probability score for 'yes' as the next token
+        over all entity_info_lines.
+        Returns the max score and the top contributing sentence.
+        """
+        # Important: do NOT include 'yes' in the prompt.
+        full_inputs = [self.format_input(mention, context, entity_name, line) for line in entity_info_lines]
+        inputs = self.tokenizer(full_inputs, return_tensors='pt', padding=True, truncation=True, max_length=256).to(self.device)
+
+        with torch.no_grad():
+            outputs = self.model(**inputs)
+            logits = outputs.logits  # (batch_size, seq_len, vocab_size)
+
+        log_probs = F.log_softmax(logits, dim=-1)
+        yes_token_id = self.tokenizer("yes", add_special_tokens=False)["input_ids"][0]
+
+        scores = []
+        for i in range(len(full_inputs)):
+            attention_mask = inputs.attention_mask[i]
+            input_len = attention_mask.sum().item()
+
+            yes_logprob = log_probs[i, input_len - 1, yes_token_id].item()
+            scores.append(yes_logprob)
+
+        max_score = max(scores)
+        best_index = scores.index(max_score)
+        best_sentence = entity_info_lines[best_index]
+
+        return max_score, best_sentence
+
+
     def compute_avg_yes_score(self, mention, context, entity_name, entity_info_lines):
         """
         Computes the average log-probability score for 'yes' as the next token
@@ -64,6 +97,51 @@ class CandidateReranker:
         best_sentence = entity_info_lines[best_index]
         return avg_score, best_sentence
 
+    def compute_avg_yes_no_ratio(self, mention, context, entity_name, entity_info_lines):
+        """
+        Computes the average log-probability scores for 'yes' and 'no' as the next token
+        over all entity_info_lines.
+        Returns the ratio (avg_yes / avg_no) and the top contributing sentence (highest yes - no).
+        """
+        # Do NOT include 'yes' or 'no' in the prompt.
+        full_inputs = [self.format_input(mention, context, entity_name, line) for line in entity_info_lines]
+        inputs = self.tokenizer(full_inputs, return_tensors='pt', padding=True, truncation=True, max_length=256).to(self.device)
+
+        with torch.no_grad():
+            outputs = self.model(**inputs)
+            logits = outputs.logits  # (batch_size, seq_len, vocab_size)
+
+        log_probs = F.log_softmax(logits, dim=-1)
+        yes_token_id = self.tokenizer("yes", add_special_tokens=False)["input_ids"][0]
+        no_token_id = self.tokenizer("no", add_special_tokens=False)["input_ids"][0]
+
+        yes_scores = []
+        no_scores = []
+        diffs = []
+
+        for i in range(len(full_inputs)):
+            attention_mask = inputs.attention_mask[i]
+            input_len = attention_mask.sum().item()
+
+            yes_logprob = log_probs[i, input_len - 1, yes_token_id].item()
+            no_logprob = log_probs[i, input_len - 1, no_token_id].item()
+
+            yes_scores.append(yes_logprob)
+            no_scores.append(no_logprob)
+            diffs.append(yes_logprob - no_logprob)
+
+        avg_yes = float(np.mean(yes_scores))
+        avg_no = float(np.mean(no_scores))
+
+        # Avoid division by zero or very small numbers
+        ratio = avg_yes / (avg_no + 1e-8)
+
+        best_index = diffs.index(max(diffs))
+        best_sentence = entity_info_lines[best_index]
+
+        return ratio, best_sentence
+
+
     def fetch_one_hop(self, entity_uri):
         """
         Fetch one-hop neighbors (both subject and object) and their labels.
@@ -87,7 +165,7 @@ class CandidateReranker:
             OPTIONAL {{ ?p rdfs:label|skos:prefLabel|dc:title|foaf:name|dblp:abstract|dc:description|dblp:title ?pLabel }}
             OPTIONAL {{ ?o rdfs:label|skos:prefLabel|dc:title|foaf:name|dblp:abstract|dc:description|dblp:title ?oLabel }}
             FILTER (?p NOT IN (dblp:signatureCreator,dblp:signaturePublication,dblp:hasSignature))
-        }} LIMIT 30
+        }} LIMIT 10
         """
         queryright = f"""
         PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
@@ -103,7 +181,7 @@ class CandidateReranker:
             OPTIONAL {{ ?p rdfs:label|skos:prefLabel|dc:title|foaf:name|dblp:abstract|dc:description|dblp:title ?pLabel }}
             OPTIONAL {{ ?o rdfs:label|skos:prefLabel|dc:title|foaf:name|dblp:abstract|dc:description|dblp:title ?oLabel }}
             FILTER (?p NOT IN (dblp:signatureCreator,dblp:signaturePublication,dblp:hasSignature))
-        }} LIMIT 30
+        }} LIMIT 10
         """
 
         response_left = requests.get(self.endpoint, headers=headers, params={"query": queryleft})
@@ -175,8 +253,9 @@ class CandidateReranker:
                     # Score the entity based on its neighborhood
                     start = time.time()
                     print(f"Scoring entity {entity_uri[0]} with neighborhood size {len(entity_neighborhood)}")
-                    #score,sentence = self.compute_max_yes_score(span['label'], text, entity_uri[0], entity_neighborhood)
+                    #score,evidence_sentence = self.compute_max_yes_score(span['label'], text, entity_uri[0], entity_neighborhood)
                     score, evidence_sentence = self.compute_avg_yes_score(span['label'], text, entity_uri[0], entity_neighborhood)
+                    #score, evidence_sentence = self.compute_avg_yes_no_ratio(span['label'], text, entity_uri[0], entity_neighborhood)
                     end = time.time()
                     print(f"Time taken for sorting: {end - start:.6f} seconds")
                     entity_scores.append([score, [entity_uri[0], entity_uri[1], entity_uri[2], evidence_sentence]]) #0 is url, 1 is label, 2 is type
