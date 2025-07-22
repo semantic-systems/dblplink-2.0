@@ -346,6 +346,7 @@ def render_default_questions() -> rx.Component:
         "What papers did Chris Biemann publish?",
         "Which papers did Debayan Banerjee publish at SIGIR?",
         "When did Tilahun Taffa publish papers at WWW?",
+        "Who co-authored the paper 'Modern Baselines for SPARQL Semantic Parsing' with Debayan in SIGIR 2022?"
     ]
     return rx.hstack(
         *[
@@ -510,7 +511,7 @@ def index() -> rx.Component:
                         border_radius="8px",
                         bg="white",
                         overflow_y="auto",
-                        max_height="200px",
+                        max_height="120px",
                         box_shadow="sm"
                     ),
 

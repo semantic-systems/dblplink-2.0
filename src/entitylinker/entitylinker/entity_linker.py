@@ -40,7 +40,10 @@ class EntityLinker:
         messages = [
         {"role": "system", "content": "You are an information extraction assistant."},
         {"role": "user", "content": f"""Extract named entities from the following sentence and classify them into one of the following types: person, publication, venue.
-         Let the output be a JSON array of objects with fields 'label' and 'type'.
+        Let the output be a JSON array of objects with fields 'label' and 'type', for example:
+        Sentence: "Who co-authored the paper 'Modern Baselines for SPARQL Semantic Parsing' with Debayan in SIGIR 2022?"
+        Entities: [{{"type": "person", "label": "Debayan Banerjee"}},{{ "type": "publication", "label": "Modern Baselines for SPARQL Semantic Parsing"}},{{"type": "venue", "label": "SIGIR"}}]
+        Not all types maybe present in a sentence. Now extract entities from the following sentence:
         Sentence: "{text}"
         Entities:"""}
         ]
