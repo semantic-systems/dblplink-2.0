@@ -127,7 +127,7 @@ if __name__ == "__main__":
     # Example usage
     config = {
         "elasticsearch": "http://localhost:9222",
-        "sparql_endpoint": "http://localhost:8897/sparql"
+        "sparql_endpoint": "https://dblp-june-2025.skynet.coypu.org/sparql"
     }
     
     entity_linker = EntityLinker(config)

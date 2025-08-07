@@ -272,7 +272,7 @@ class CandidateReranker:
 if __name__ == "__main__":
     # Example usage
     config = {
-        "sparql_endpoint": "http://localhost:89897/sparql"
+        "sparql_endpoint": "https://dblp-june-2025.skynet.coypu.org/sparql"
     }
     reranker = CandidateReranker(config)
     text = "which papers in neurips was authored by Biemann?"

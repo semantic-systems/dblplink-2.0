@@ -346,7 +346,7 @@ def render_default_questions() -> rx.Component:
         "What papers did Chris Biemann publish?",
         "Which papers did Debayan Banerjee publish at SIGIR?",
         "When did Tilahun Taffa publish papers at WWW?",
-        "Who co-authored the paper 'Modern Baselines for SPARQL Semantic Parsing' with Debayan in SIGIR 2022?"
+        "Co-author of 'Attention is All You Need' with Ashish Vaswani in NEURIPS?"
     ]
     return rx.hstack(
         *[
@@ -405,7 +405,13 @@ def render_candidates_table() -> rx.Component:
                 State.candidates,  # Now a flat list of dicts
                 lambda candidate: rx.table.row(
                     rx.table.cell(candidate["span_id"]),  # Display span ID
-                    rx.table.cell(candidate["uri"]),
+                    rx.table.cell(rx.link(
+                            candidate.uri,
+                            href=candidate.uri,
+                            is_external=True,
+                            color="blue",
+                            text_decoration="underline"
+                        )),
                     rx.table.cell(candidate["label"]),
                     rx.table.cell(candidate["type"]),
                 ),
@@ -500,27 +506,28 @@ def index() -> rx.Component:
                     width="50%",
                     padding="4"
                 ),
+                rx.spacer(spacing="5"),
                 rx.vstack(
                     rx.heading("Process Log", size="4", mb="2", color="gray.700",font_weight="normal"),
                     rx.box(
                         rx.foreach(State.updates, lambda update: rx.text(update, font_size="0.9em", color="gray.600")),
-                        width="100%",
+                        width="70%",
                         min_height="50px",
                         padding="3",
                         border="1px solid #e0e0e0",
                         border_radius="8px",
                         bg="white",
                         overflow_y="auto",
-                        max_height="120px",
+                        max_height="220px",
                         box_shadow="sm"
                     ),
 
-                    width="50%",
+                    width="40%",
                     padding="4"
                 ),
                 padding="4",
                 max_width="800px",
-                margin_x="auto"
+                margin_x="auto",
             ),
             rx.cond(
                 State.progress > 0,
@@ -554,13 +561,13 @@ def index() -> rx.Component:
                     mt="4"
                 )
             ),
-                rx.cond(
-                State.candidates.length() > 0,
-                rx.box(
-                    render_collapsible("Fetched Candidates", render_candidates_table()),
-                    align_self="start",
-                    mt="4"
-                )
+            rx.cond(
+            State.candidates.length() > 0,
+            rx.box(
+                render_collapsible("Fetched Candidates", render_candidates_table()),
+                align_self="start",
+                mt="4"
+            )
             ),
             rx.cond(
                 State.final_results.length() > 0,

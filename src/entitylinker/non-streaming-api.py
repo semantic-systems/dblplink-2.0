@@ -5,7 +5,7 @@ import traceback
 # Load configuration
 config = {
     "elasticsearch": "http://localhost:9222",
-    "sparql_endpoint": "http://localhost:8897/sparql"
+    "sparql_endpoint": "https://dblp-june-2025.skynet.coypu.org/sparql"
 }
 
 # Initialize EntityLinker once
@@ -101,5 +101,5 @@ def link_entities():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5001)
+    app.run(host="0.0.0.0", port=5002)
 
