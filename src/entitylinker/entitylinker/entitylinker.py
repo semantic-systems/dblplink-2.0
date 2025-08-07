@@ -189,8 +189,16 @@ def about() -> rx.Component:
             ),
             rx.text(
                 "This application allows users to input questions and receive linked entities "
-                "from the DBLP dataset, enhancing research and information retrieval.",
-                color="gray.600",
+                "from the DBLP dataset, enhancing research and information retrieval. Read more in the paper on ",
+                rx.link(
+                    "arXiv",
+                    href="https://www.arxiv.org/abs/2507.22811",
+                    is_external=True,
+                    color="blue.600",
+                    font_weight="medium"
+                ),
+                ".",
+                color="gray.700",
                 mb="3",
                 text_align="center"
             ),
@@ -199,6 +207,9 @@ def about() -> rx.Component:
         max_width="800px",
         margin_x="auto"
     )
+
+import reflex as rx
+
 def api() -> rx.Component:
     return rx.container(
         rx.vstack(
@@ -216,16 +227,89 @@ def api() -> rx.Component:
                 mb="3",
                 text_align="center"
             ),
-            rx.unordered_list(
-                rx.list_item("POST /get_spans - Detects spans in the input text."),
-                rx.list_item("POST /get_candidates - Fetches candidate entities for detected spans."),
-                rx.list_item("POST /get_final_result - Reranks candidates and returns final linked results.")
+            rx.text(
+                "Example: Calling the /link_entities endpoint using curl:",
+                color="gray.600",
+                mt="5",
+                text_align="left"
+            ),
+            rx.code_block(
+                '''curl -X POST https://restapi.dblplink-2.skynet.coypu.org/link_entities \\
+  -H "Content-Type: application/json" \\
+  -d '{
+        "question": "Which papers were published by Debayan Banerjee in SIGIR?",
+        "text_match_only": false
+      }' ''',
+                language="bash",
+                wrap="wrap",
+                width="100%",
+                background="gray.50",
+                padding="4",
+                border_radius="md",
+                font_size="sm",
+            ),
+            rx.text(
+                "Sample JSON response:",
+                color="gray.600",
+                mt="6",
+                text_align="left"
+            ),
+            rx.code_block(
+                '''{
+  "entitylinkingresults": [
+    {
+      "label": "Debayan Banerjee",
+      "result": [
+        [-12.822916666666666, [
+          "https://dblp.org/pid/213/7475",
+          "Debayan Banerjee",
+          "https://dblp.org/rdf/schema#Creator",
+          "Debayan Banerjee and Jagannath Singh: Prediction of Stroke Risk Factors for Better Pre-emptive Healthcare: A Public-Survey-Based Approach. (2019) — createdBy — Debayan Banerjee"
+        ]],
+        [-13.72265625, [
+          "https://dblp.org/pid/392/9280",
+          "Debayan Bandyopadhyay",
+          "https://dblp.org/rdf/schema#Creator",
+          "Pei Zeng et al.: Towards efficient and secure quantum-classical communication networks. (2024) — authoredBy — Debayan Bandyopadhyay"
+        ]]
+        // ... more results
+      ],
+      "type": "person"
+    },
+    {
+      "label": "SIGIR",
+      "result": [
+        [-12.490234375, [
+          "https://dblp.org/streams/conf/sigir",
+          "Annual International ACM SIGIR Conference",
+          "https://dblp.org/rdf/schema#Stream",
+          "Xinghua Zhang et al.: Exploring Modular Task Decomposition in Cross-domain Named Entity Recognition. (2022) — publishedInStream — SIGIR"
+        ]]
+        // ... more results
+      ],
+      "type": "venue"
+    }
+  ],
+  "predictedlabelspans": [
+    "Debayan Banerjee : person",
+    "SIGIR : venue"
+  ],
+  "question": "Which papers were published by Debayan Banerjee in SIGIR?"
+}''',
+                language="json",
+                wrap="wrap",
+                width="100%",
+                background="gray.50",
+                padding="4",
+                border_radius="md",
+                font_size="sm",
             ),
         ),
         padding="4",
         max_width="800px",
         margin_x="auto"
     )
+
 def contact() -> rx.Component:
     return rx.container(
         rx.vstack(
