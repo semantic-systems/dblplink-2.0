@@ -37,4 +37,4 @@ CUDA_VISIBLE_DEVICES=1 python non-streaming-api.py 5002
 FRONTEND_CMD="next dev -H 0.0.0.0 -p 3001" reflex run --frontend-port 3001 --backend-port 8001 --env prod
 ```
 
-Further instructions regarding setting up of a local DBLP SPARQL endpoint and the label Elasticsearch index are currently missing, and will be made available soon. Please contact debayan.banerjee AT leuphana DOT de.
+Further instructions regarding evaluation, setting up of a local DBLP SPARQL endpoint and the label Elasticsearch index are currently missing, and will be made available soon. Please contact debayan.banerjee AT leuphana DOT de.
